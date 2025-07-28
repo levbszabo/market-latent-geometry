@@ -64,7 +64,7 @@ LEARNING_RATE = 1e-4
 #   • 200-500:  Thorough training (recommended for production)
 #   • 1000+:    Very thorough, high risk of overfitting without early stopping
 #   💡 TIP: Use early stopping, so this is just an upper bound
-NUM_EPOCHS = 50
+NUM_EPOCHS = 80
 
 # PATIENCE - Early stopping patience (epochs without validation improvement)
 #   📈 IMPACT: Higher patience = more training before stopping

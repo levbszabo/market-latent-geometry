@@ -165,7 +165,6 @@ python regime_modeling.py \
 - `../results/regime_analysis_YYYYMMDD_HHMMSS/` folder containing:
 
 **Core Analysis Files**:
-- `regime_stats_euclidean.csv` & `regime_stats_geodesic.csv` - Detailed regime statistics
 - `financial_metrics_euclidean.csv` & `financial_metrics_geodesic.csv` - Risk-return metrics
 - `sector_distribution_euclidean.csv` & `sector_distribution_geodesic.csv` - Sector compositions
 - `transition_matrix_euclidean.csv` & `transition_matrix_geodesic.csv` - Regime transition probabilities
@@ -178,14 +177,10 @@ python regime_modeling.py \
 **Static Visualizations**:
 - `regime_performance_comparison.png` - Risk-return analysis by regime
 - `sector_distribution_heatmap.png` - Sector concentration heatmaps
-- `regime_timeline.png` - Regime evolution over time
 - `transition_matrices.png` - Regime transition probability matrices
-- `clustering_comparison.png` - Financial coherence comparison
 
-**Interactive Visualizations**:
-- `interactive_regime_performance.html` - Interactive risk-return scatter plots
-- `interactive_sector_analysis.html` - Interactive sector distribution charts
-- `interactive_regime_timeline.html` - Interactive time series regime visualization
+**Interactive Visualizations (Coming Soon)**:
+- Interactive plots for deeper exploration.
 
 ## 📁 Directory Structure
 
@@ -238,7 +233,7 @@ LAMBDA_ORTHO = 1e-3    # Orthogonality penalty weight
 2. **Basic evaluation**: Run `evaluate_vae.py` to check training quality and orthogonality
 3. **Geometric analysis**: Run `analyze_latent_geometry.py` for deep manifold analysis
 4. **Regime modeling**: Run `regime_modeling.py` to map clusters to financial regimes
-5. **Explore results**: Open the interactive HTML files to explore the 3D latent space and regime dynamics
+5. **Explore results**: Open the interactive HTML files to explore the 3D latent space and review the `REGIME_ANALYSIS_SUMMARY.md` for financial insights.
 
 ## 📊 Key Insights You'll Get
 

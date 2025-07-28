@@ -116,15 +116,39 @@ class LatentGeometryAnalyzer:
             # Combine all latent vectors
             all_latent = np.vstack([train_latent, val_latent, test_latent])
 
+            # Load date information
+            try:
+                with open(self.results_path / "date_info.json", "r") as f:
+                    date_info = json.load(f)
+                all_dates = pd.to_datetime(
+                    date_info["train_dates"]
+                    + date_info["val_dates"]
+                    + date_info["test_dates"]
+                )
+                self.has_dates = True
+            except FileNotFoundError:
+                print(
+                    "   ⚠️  Warning: date_info.json not found. Dates will not be included."
+                )
+                all_dates = None
+                self.has_dates = False
+
             # Subsample if too large
             if len(all_latent) > self.n_samples:
-                indices = np.random.choice(
-                    len(all_latent), self.n_samples, replace=False
+                # Sort indices to maintain temporal order for plots
+                indices = np.sort(
+                    np.random.choice(len(all_latent), self.n_samples, replace=False)
                 )
                 self.z = all_latent[indices]
+                self.sample_indices = indices
+                if self.has_dates:
+                    self.dates = all_dates[indices]
                 print(f"🔢 Subsampled to {self.n_samples} points")
             else:
                 self.z = all_latent
+                self.sample_indices = np.arange(len(all_latent))
+                if self.has_dates:
+                    self.dates = all_dates
                 print(f"🔢 Using all {len(all_latent)} points")
 
             # Convert to tensor
@@ -939,22 +963,26 @@ Cluster Agreement (ARI): {self.clustering_comparison['cluster_agreement']:.3f}
         print("\n💾 Saving summary data...")
 
         # Create summary dataframe
-        summary_df = pd.DataFrame(
-            {
-                "Time_Index": self.time_indices,
-                "Latent_1": self.z[:, 0],
-                "Latent_2": self.z[:, 1],
-                "Latent_3": self.z[:, 2],
-                "Curvature": self.curvatures,
-                "Jacobian_Norm": self.jacobian_norms,
-                "Euclidean_Cluster": self.labels_euclidean,
-                "Geodesic_Cluster": self.labels_geodesic,
-            }
-        )
+        summary_data = {
+            "Time_Index": self.time_indices,
+            "Original_Index": self.sample_indices,
+            "Latent_1": self.z[:, 0],
+            "Latent_2": self.z[:, 1],
+            "Latent_3": self.z[:, 2],
+            "Curvature": self.curvatures,
+            "Jacobian_Norm": self.jacobian_norms,
+            "Euclidean_Cluster": self.labels_euclidean,
+            "Geodesic_Cluster": self.labels_geodesic,
+        }
+        if self.has_dates:
+            summary_data["Date"] = self.dates.strftime("%Y-%m-%d")
+
+        summary_df = pd.DataFrame(summary_data)
 
         # Add all latent dimensions
         for i in range(self.latent_dim):
-            summary_df[f"Latent_{i+1}"] = self.z[:, i]
+            if f"Latent_{i+1}" not in summary_df.columns:
+                summary_df[f"Latent_{i+1}"] = self.z[:, i]
 
         summary_df.to_csv(self.output_dir / "latent_geometry_summary.csv", index=False)
 
