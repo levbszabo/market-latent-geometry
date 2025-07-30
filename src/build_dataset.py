@@ -5,20 +5,19 @@ Simple Dataset Builder for VAE Analysis
 We include this script so you can build your own dataset on your own universe/time series data.
 **note this script can take a while specifically to write the numpy arrays to disk.**
 
-This script builds a simplified dataset using price data and sector information for S&P 500 stocks.
+This script builds a simplified dataset using price data for S&P 500 stocks.
 It focuses on creating a clean, VAE-ready dataset with the following features:
 - Log price changes (daily returns)
 - Log volume
-- Sector encoding (scaled to [0,1] range)
 
-The output format is N x 3 (where N = number of stocks), suitable for VAE dimensionality reduction.
-For 500 stocks, this creates a 1500-length feature vector per time step.
+The output format is N x 2 (where N = number of stocks), suitable for VAE dimensionality reduction.
+For 500 stocks, this creates a 1000-length feature vector per time step.
 
 Key features:
-1. Loads S&P 500 tickers and their price/sector data
-2. Calculates log price changes, log volume, and encodes sectors numerically
+1. Loads S&P 500 tickers and their price data
+2. Calculates log price changes and log volume
 3. Creates 80:10:10 train/validation/test splits (time-based)
-4. Applies global Z-normalization to numeric features based on training data
+4. Applies global Z-normalization to all features based on training data
 5. Outputs data in a format suitable for VAE processing
 """
 
@@ -41,7 +40,7 @@ warnings.filterwarnings("ignore", category=pd.errors.PerformanceWarning)
 
 class SimpleDatasetBuilder:
     """
-    Builds a simplified dataset using price data and sector information for VAE analysis.
+    Builds a simplified dataset using price data for VAE analysis.
     """
 
     def __init__(
@@ -64,44 +63,21 @@ class SimpleDatasetBuilder:
         logger.info(f"Output directory: {self.output_path}")
         logger.info(f"Latest symlink: {latest_path}")
 
-        self.tickers, self.sector_dict = self._load_sp500_tickers_and_sectors()
+        self.tickers = self._load_sp500_tickers()
         self.trading_calendar = None  # Will be created from actual data
 
-    def _load_sp500_tickers_and_sectors(self) -> Tuple[List[str], Dict[str, float]]:
-        """Loads the list of S&P 500 tickers and creates sector encoding."""
-        logger.info("Loading S&P 500 tickers and sector information...")
+    def _load_sp500_tickers(self) -> List[str]:
+        """Loads the list of S&P 500 tickers."""
+        logger.info("Loading S&P 500 tickers...")
         ticker_file = self.data_path / "universe/sp500_tickers.csv"
         if not ticker_file.exists():
             raise FileNotFoundError(f"Ticker file not found: {ticker_file}")
 
         df = pd.read_csv(ticker_file)
-
-        # Get unique sectors and create mapping
-        unique_sectors = sorted(df["sector"].unique())
-        logger.info(f"Found {len(unique_sectors)} unique sectors: {unique_sectors}")
-
-        # Create sector to numeric ID mapping (0-based indexing)
-        sector_to_id = {sector: idx for idx, sector in enumerate(unique_sectors)}
-
-        # Create ticker to sector mapping with scaled values [0, 1]
-        sector_dict = {}
-        max_sector_id = len(unique_sectors) - 1
-
-        for _, row in df.iterrows():
-            ticker = row["symbol"]
-            sector = row["sector"]
-            sector_id = sector_to_id[sector]
-            # Scale to [0, 1] range
-            sector_id_scaled = sector_id / max_sector_id if max_sector_id > 0 else 0.0
-            sector_dict[ticker] = sector_id_scaled
-
         tickers = df["symbol"].unique().tolist()
-        logger.info(f"Loaded {len(tickers)} unique tickers with sector mappings.")
-        logger.info(
-            f"Sector encoding: {dict(list(sector_to_id.items())[:5])}... (showing first 5)"
-        )
+        logger.info(f"Loaded {len(tickers)} unique tickers.")
 
-        return tickers, sector_dict
+        return tickers
 
     def _load_price_data(self, ticker: str) -> Optional[pd.DataFrame]:
         """Loads and processes price data for a single ticker."""
@@ -139,20 +115,13 @@ class SimpleDatasetBuilder:
         # Calculate log volume
         df["log_volume"] = np.log(df["volume"])
 
-        # Add sector information
-        df["sector_id_scaled"] = self.sector_dict.get(
-            ticker, 0.0
-        )  # Default to 0.0 if missing
-
         # Remove the first row (NaN due to price change calculation)
         df = df.dropna(subset=["log_price_change"])
 
         # Add ticker column
         df["ticker"] = ticker
 
-        return df[
-            ["date", "ticker", "log_price_change", "log_volume", "sector_id_scaled"]
-        ]
+        return df[["date", "ticker", "log_price_change", "log_volume"]]
 
     def _create_master_panel(self) -> pd.DataFrame:
         """Creates the master panel dataset with all tickers."""
@@ -233,10 +202,10 @@ class SimpleDatasetBuilder:
     def _normalize_features(
         self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Applies global Z-normalization to numeric features using training data statistics."""
+        """Applies global Z-normalization to all features using training data statistics."""
         logger.info("Applying global Z-normalization based on training data...")
 
-        # Only normalize numeric features - sector_id_scaled is already in [0,1] range
+        # Normalize all numeric features
         feature_cols = ["log_price_change", "log_volume"]
 
         # Calculate global normalization parameters from training data only
@@ -267,7 +236,6 @@ class SimpleDatasetBuilder:
         )
 
         logger.info("Global normalization completed")
-        logger.info(f"Sector features remain in original [0,1] range")
 
         return train_df, val_df, test_df
 
@@ -275,8 +243,8 @@ class SimpleDatasetBuilder:
         self, df: pd.DataFrame
     ) -> Tuple[np.ndarray, List[str], List[str]]:
         """
-        Converts panel data to VAE-ready format: N x 3 (where N = number of stocks).
-        Returns array of shape (time_steps, n_stocks * 3) and metadata.
+        Converts panel data to VAE-ready format: N x 2 (where N = number of stocks).
+        Returns array of shape (time_steps, n_stocks * 2) and metadata.
         """
         logger.info("Converting data to VAE format...")
 
@@ -286,7 +254,7 @@ class SimpleDatasetBuilder:
 
         n_dates = len(unique_dates)
         n_tickers = len(unique_tickers)
-        n_features = 3  # log_price_change, log_volume, sector_id_scaled
+        n_features = 2  # log_price_change, log_volume
 
         logger.info(f"Creating array of shape ({n_dates}, {n_tickers * n_features})")
         logger.info(
@@ -303,7 +271,6 @@ class SimpleDatasetBuilder:
                 [
                     f"{ticker}_log_price_change",
                     f"{ticker}_log_volume",
-                    f"{ticker}_sector_id_scaled",
                 ]
             )
 
@@ -320,7 +287,6 @@ class SimpleDatasetBuilder:
                     row = ticker_data.iloc[0]
                     vae_array[date_idx, base_idx] = row["log_price_change"]
                     vae_array[date_idx, base_idx + 1] = row["log_volume"]
-                    vae_array[date_idx, base_idx + 2] = row["sector_id_scaled"]
 
         # Handle missing values by forward filling then backward filling
         vae_df = pd.DataFrame(vae_array, columns=feature_names, index=unique_dates)
@@ -370,15 +336,14 @@ class SimpleDatasetBuilder:
         metadata = {
             "feature_names": feature_names,
             "n_tickers": len(self.tickers),
-            "n_features_per_ticker": 3,
+            "n_features_per_ticker": 2,
             "total_features": len(feature_names),
             "tickers": self.tickers,
             "train_dates": [str(d) for d in train_dates],
             "val_dates": [str(d) for d in val_dates],
             "test_dates": [str(d) for d in test_dates],
             "normalization": "global_zscore",
-            "sector_encoding": "scaled_id_0_to_1",
-            "features": ["log_price_change", "log_volume", "sector_id_scaled"],
+            "features": ["log_price_change", "log_volume"],
         }
 
         import json
@@ -392,7 +357,7 @@ class SimpleDatasetBuilder:
         logger.info("=" * 50)
 
         # Shape validation
-        expected_features = len(self.tickers) * 3
+        expected_features = len(self.tickers) * 2
         assert (
             train_vae.shape[1] == expected_features
         ), f"Expected {expected_features} features, got {train_vae.shape[1]}"
@@ -401,19 +366,15 @@ class SimpleDatasetBuilder:
         )
 
         # Feature scaling validation
-        # Check numeric features (every 3rd starting from 0 and 1)
-        price_features = train_vae[:, 0::3]  # log_price_change features
-        volume_features = train_vae[:, 1::3]  # log_volume features
-        sector_features = train_vae[:, 2::3]  # sector_id_scaled features
+        # Check features (every 2nd starting from 0 and 1)
+        price_features = train_vae[:, 0::2]  # log_price_change features
+        volume_features = train_vae[:, 1::2]  # log_volume features
 
         logger.info(
             f"Price features - mean: {price_features.mean():.6f}, std: {price_features.std():.6f}"
         )
         logger.info(
             f"Volume features - mean: {volume_features.mean():.6f}, std: {volume_features.std():.6f}"
-        )
-        logger.info(
-            f"Sector features - min: {sector_features.min():.6f}, max: {sector_features.max():.6f}"
         )
 
         # Verify normalization
@@ -423,12 +384,6 @@ class SimpleDatasetBuilder:
         assert (
             abs(volume_features.mean()) < 0.1
         ), f"Volume features not properly normalized: mean={volume_features.mean()}"
-        assert (
-            sector_features.min() >= 0.0
-        ), f"Sector features below 0: min={sector_features.min()}"
-        assert (
-            sector_features.max() <= 1.0
-        ), f"Sector features above 1: max={sector_features.max()}"
 
         logger.info("✅ All validation checks passed!")
 
@@ -447,14 +402,10 @@ class SimpleDatasetBuilder:
             f"Test dataset: {test_vae.shape[0]} time steps × {test_vae.shape[1]} features"
         )
         logger.info(
-            f"Feature vector length: {train_vae.shape[1]} ({len(self.tickers)} stocks × 3 features)"
+            f"Feature vector length: {train_vae.shape[1]} ({len(self.tickers)} stocks × 2 features)"
         )
-        logger.info(
-            f"Features per ticker: log_price_change, log_volume, sector_id_scaled"
-        )
-        logger.info(
-            f"Normalization: Global Z-score for numeric features, [0,1] scaling for sectors"
-        )
+        logger.info(f"Features per ticker: log_price_change, log_volume")
+        logger.info(f"Normalization: Global Z-score for all features")
         logger.info(f"Output directory: {self.output_path}")
         logger.info("=" * 50)
 

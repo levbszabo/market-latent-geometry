@@ -55,7 +55,7 @@ BATCH_SIZE = 32
 #   • 1e-3:     Standard rate, good for most deep learning
 #   • 1e-2+:    Fast learning, likely to diverge with financial data
 #   💡 TIP: Financial data is noisy - use conservative learning rates
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 
 # NUM_EPOCHS - Maximum number of complete passes through the training data
 #   📈 IMPACT: More epochs = more training, but risk of overfitting
@@ -96,8 +96,7 @@ WEIGHT_DECAY = 1e-4
 #   • 0.1-1.0:  Light VAE regularization, some structure
 #   • 1.0:      Standard VAE, forces Gaussian latent space
 #   • 4.0+:     β-VAE for disentangled representations
-#   💡 TIP: Financial regimes aren't Gaussian - use BETA=0.0 for best results
-BETA = 0.00
+BETA = 1.00
 
 # C - KL capacity target for gradual annealing
 #   📈 IMPACT: Controls how much Gaussian structure to enforce
@@ -106,7 +105,7 @@ BETA = 0.00
 #   • 0.1-0.5:  Light capacity constraint
 #   • 1.0+:     Strong capacity constraint
 #   💡 TIP: Keep at 0.0 when BETA=0.0
-C = 0.00
+C = 4.00
 # LAMBDA_ORTHO - Orthogonality penalty strength (decorrelates latent factors)
 #   📈 IMPACT: Encourages independent, uncorrelated latent factors
 #   🎯 USAGE:
@@ -116,4 +115,4 @@ C = 0.00
 #   • 1e-2:     Strong decorrelation, may hurt reconstruction
 #   • 1e-1+:    Very strong, likely to hurt performance
 #   💡 TIP: Helps create interpretable, independent market factors
-LAMBDA_ORTHO = 1e-3
+LAMBDA_ORTHO = 1e-4
