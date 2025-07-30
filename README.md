@@ -1,6 +1,8 @@
 # Market Latent Geometry
 
-Explore latent market factors using Autoencoders, Unsupervised Learning and Geometric methods. 
+**Learning and analyzing the geometric structure of financial market manifolds using β-VAE and Riemannian geometry.**
+
+This repository implements a novel framework for discovering the intrinsic geometry of financial time series through variational autoencoders. By treating the VAE decoder as a parameterization of an embedded manifold, we compute Riemannian metric tensors and geodesic distances that respect the learned curvature of market states.
 
 ## 🚀 Quick Start
 
@@ -20,29 +22,26 @@ pip install -r requirements.txt
 ```bash
 cd src/
 
-# Step 1: Train the VAE
+# Step 1: Train the β-VAE with specialized loss
 python train_vae.py
 
-# Step 2: Evaluate the trained model
+# Step 2: Evaluate latent space quality 
 python evaluate_vae.py ../results/vae_training_YYYYMMDD_HHMMSS
 
-# Step 3: Analyze latent geometry
+# Step 3: Analyze manifold geometry and clustering
 python analyze_latent_geometry.py ../results/vae_training_YYYYMMDD_HHMMSS
-
-# Step 4: Perform regime modeling and financial analysis
-python regime_modeling.py
 ```
 
-## 📋 Scripts Overview
+## 📋 Pipeline Overview
 
 ### 🧠 `train_vae.py`
-**Purpose**: Train a Variational Autoencoder on financial market data
+**Purpose**: Train a β-Variational Autoencoder with stability enhancements for financial data
 
-**What it does**:
-- Loads preprocessed market data from `../processed_data_simple/latest/`
-- Trains a VAE with configurable hyperparameters
-- Saves model weights, latent representations, and training plots
-- Creates timestamped results folder with all outputs
+**Key Features**:
+- Specialized loss function to overcome posterior collapse
+- KL capacity scheduling to prevent over-regularization  
+- Orthogonality penalty for disentangled latent factors
+- Robust training pipeline for financial time series
 
 **Usage**:
 ```bash
@@ -51,24 +50,22 @@ python train_vae.py
 
 **Outputs**:
 - `../results/vae_training_YYYYMMDD_HHMMSS/` folder containing:
-  - `model_weights.pth` - Trained model weights
-  - `model_complete.pth` - Complete model object
+  - `model_weights.pth` - Trained β-VAE weights
   - `train_latent.npy`, `val_latent.npy`, `test_latent.npy` - Latent representations
   - `training_config.json` - Model configuration and hyperparameters
   - `training_history.csv` - Training metrics per epoch
-  - Various plots and visualizations
-  - `SUMMARY.md` - Complete training report
+  - Training diagnostics and visualizations
 
 ---
 
 ### 📊 `evaluate_vae.py`
-**Purpose**: Basic evaluation of the trained VAE model
+**Purpose**: Validate latent space quality and training stability
 
-**What it does**:
-- Analyzes latent space correlation (orthogonality)
-- Plots training/validation loss curves
-- Compares latent distributions to N(0,1)
-- Generates simple evaluation report
+**What it analyzes**:
+- Latent space orthogonality (decorrelation success)
+- Marginal normality of latent dimensions
+- Training convergence and loss curves
+- Adherence to VAE prior assumptions
 
 **Usage**:
 ```bash
@@ -76,23 +73,22 @@ python evaluate_vae.py ../results/vae_training_YYYYMMDD_HHMMSS
 ```
 
 **Outputs**:
-- `../results/vae_training_YYYYMMDD_HHMMSS/evaluation/` folder containing:
-  - `correlation_analysis.png` - Correlation heatmap and distribution
-  - `training_curves.png` - Training and validation loss curves
-  - `distribution_analysis.png` - All latent dimensions vs N(0,1)
-  - `EVALUATION_SUMMARY.md` - Simple evaluation report
-  - JSON and CSV files with detailed metrics
+- `correlation_analysis.png` - Latent correlation matrix and diagnostics
+- `distribution_analysis.png` - Marginal distributions vs N(0,1) 
+- `training_curves.png` - Loss convergence analysis
+- Statistical validation reports
 
 ---
 
 ### 🌐 `analyze_latent_geometry.py`
-**Purpose**: Part 1 of research pipeline - geometric analysis of latent manifold
+**Purpose**: Core geometric analysis - compute manifold metrics and geodesic distances
 
 **What it does**:
-- Computes decoder Jacobians and Riemannian metric tensors
-- Approximates geodesic vs Euclidean distances
-- Performs clustering in both geometric spaces
-- Creates 3D interactive visualizations of manifold structure
+- Computes decoder Jacobians and Riemannian metric tensors G(z)
+- Calculates geodesic distances that respect manifold curvature
+- Compares clustering performance: Euclidean vs Geodesic vs PCA
+- Provides evidence for intrinsic market manifold curvature
+- Creates interactive 3D visualizations of learned geometry
 
 **Usage**:
 ```bash
@@ -106,184 +102,131 @@ python analyze_latent_geometry.py ../results/vae_training_YYYYMMDD_HHMMSS \
     --output_dir custom_analysis
 ```
 
-**Options**:
-- `--n_samples`: Number of samples to analyze (default: 1000)
-- `--n_clusters`: Number of clusters for K-means (default: 5)
-- `--output_dir`: Custom output directory (default: results_path/geometry_analysis)
+**Key Outputs**:
 
-**Outputs**:
-- `../results/vae_training_YYYYMMDD_HHMMSS/geometry_analysis/` folder containing:
-
-**Interactive 3D Visualizations** (if plotly installed):
-- `3d_latent_flow.html` - Time-colored 3D latent flow
-- `3d_curvature_map.html` - Curvature-colored manifold map
-- `3d_clustering_comparison.html` - Euclidean vs geodesic clustering
-- `3d_jacobian_norm_map.html` - Jacobian norm visualization
-
-**Analysis Data**:
-- `jacobians.npy` - Decoder Jacobian matrices
-- `riemannian_metrics.npy` - Metric tensors G(z)
+**🎯 Geometric Analysis**:
+- `jacobians.npy` - Decoder Jacobian matrices ∂g(z)/∂z
+- `riemannian_metrics.npy` - Metric tensors G(z) = J^T J
 - `geodesic_distances.npy` & `euclidean_distances.npy` - Distance matrices
+- `geodesic_vs_euclidean.png` - Evidence of manifold curvature
+
+**📊 Clustering Validation**:
+- `clustering_comparison.png` - Statistical comparison across methods
+- `clustering_comparison.json` - Silhouette, Calinski-Harabasz, Davies-Bouldin scores
+- `2d_cluster_boundaries_comparison.png` - Decision surface visualization
 - `euclidean_clusters.npy` & `geodesic_clusters.npy` - Cluster labels
 
-**Summary Files**:
-- `latent_geometry_summary.csv` - Complete data in tabular format
-- `geometry_analysis_stats.json` - Summary statistics
-- `clustering_comparison.png` - Statistical comparison of clustering approaches
-- `clustering_comparison.json` - Detailed clustering quality metrics
-- Various 2D analysis plots
-
----
-
-### 💼 `regime_modeling.py`
-**Purpose**: Part 2 of research pipeline - map geometric clustering to financial regimes
-
-**What it does**:
-- Aligns geometry analysis results with original time series data including sectors
-- Computes regime-level financial metrics (returns, volatility, drawdowns, Sharpe ratios)
-- Analyzes sector distributions and concentrations within each regime
-- Performs regime transition analysis and persistence modeling
-- Compares Euclidean vs Geodesic clustering from a financial perspective
-- Validates geometric hypothesis with statistical tests
-
-**Usage**:
-```bash
-# Automatic detection of latest results
-python regime_modeling.py
-
-# Specify paths manually
-python regime_modeling.py \
-    --results_path ../results/vae_training_YYYYMMDD_HHMMSS \
-    --data_path ../processed_data_simple/latest
-```
-
-**Options**:
-- `--results_path`: Path to VAE training results (auto-detects latest if not specified)
-- `--data_path`: Path to processed data directory (defaults to ../processed_data_simple/latest)
-
-**Outputs**:
-- `../results/regime_analysis_YYYYMMDD_HHMMSS/` folder containing:
-
-**Core Analysis Files**:
-- `financial_metrics_euclidean.csv` & `financial_metrics_geodesic.csv` - Risk-return metrics
-- `sector_distribution_euclidean.csv` & `sector_distribution_geodesic.csv` - Sector compositions
-- `transition_matrix_euclidean.csv` & `transition_matrix_geodesic.csv` - Regime transition probabilities
-- `aligned_regime_data.parquet` - Full aligned dataset for further analysis
-
-**Comparison Results**:
-- `clustering_comparison_summary.json` - Quantitative comparison of clustering approaches
-- `REGIME_ANALYSIS_SUMMARY.md` - Comprehensive executive summary
-
-**Static Visualizations**:
-- `regime_performance_comparison.png` - Risk-return analysis by regime
-- `sector_distribution_heatmap.png` - Sector concentration heatmaps
-- `transition_matrices.png` - Regime transition probability matrices
-
-**Interactive Visualizations (Coming Soon)**:
-- Interactive plots for deeper exploration.
+**🎨 Interactive 3D Visualizations** (requires plotly):
+- `3d_latent_flow.html` - Time-colored trajectory through latent manifold
+- `3d_clustering_comparison.html` - Euclidean vs geodesic clustering comparison
+- `3d_curvature_map.html` - Local curvature visualization
+- `3d_jacobian_norm_map.html` - Jacobian norm distribution
 
 ## 📁 Directory Structure
 
 ```
 market-latent-geometry/
 ├── src/
-│   ├── train_vae.py              # Main VAE training script
-│   ├── evaluate_vae.py           # Basic model evaluation
-│   ├── analyze_latent_geometry.py # Geometric analysis (Part 1)
-│   ├── regime_modeling.py        # Regime analysis (Part 2)
-│   ├── model.py                  # VAE model definition
+│   ├── train_vae.py              # β-VAE training with specialized loss
+│   ├── evaluate_vae.py           # Latent space validation  
+│   ├── analyze_latent_geometry.py # Geometric analysis and clustering
+│   ├── model.py                  # β-VAE architecture definition
 │   └── config.py                 # Hyperparameter configuration
 ├── processed_data_simple/
-│   └── latest/                   # Preprocessed market data
-├── data/
-│   └── universe/
-│       └── sp500_tickers.csv     # Sector mapping for tickers
+│   └── latest/                   # Preprocessed S&P 500 market data
 ├── results/
-│   ├── vae_training_*/           # Training results (timestamped)
-│   │   ├── evaluation/           # Basic evaluation outputs
-│   │   └── geometry_analysis/    # Geometric analysis outputs
-│   └── regime_analysis_*/        # Regime analysis results (timestamped)
+│   └── vae_training_*/           # Training results (timestamped)
+│       ├── evaluation/           # Latent space validation
+│       └── geometry_analysis/    # Geometric analysis outputs
 └── requirements.txt
 ```
 
 ## ⚙️ Configuration
 
-Modify hyperparameters in `src/config.py`:
+Core hyperparameters in `src/config.py`:
 
 ```python
-# Model architecture
-LATENT_DIM = 12        # Number of latent factors
+# β-VAE Architecture  
+LATENT_DIM = 12        # Latent manifold dimension
 HIDDEN_DIM = 128       # Hidden layer size
-DROPOUT_RATE = 0.1     # Dropout rate
+INPUT_DIM = 1006       # Market data dimension (503 stocks × 2 features)
 
-# Training parameters
-LEARNING_RATE = 1e-4   # Learning rate
+# Specialized Loss Components
+BETA = 1.0             # KL divergence weight 
+C_CAPACITY = 4.0       # KL capacity target
+LAMBDA_ORTHO = 1e-4    # Orthogonality penalty weight
+
+# Training Parameters
+LEARNING_RATE = 1e-3   # Adam learning rate
 BATCH_SIZE = 32        # Batch size
-NUM_EPOCHS = 100       # Maximum epochs
-PATIENCE = 10          # Early stopping patience
-
-# Loss weights
-BETA = 0.0             # KL divergence weight (0 = autoencoder mode)
-LAMBDA_ORTHO = 1e-3    # Orthogonality penalty weight
+NUM_EPOCHS = 80        # Maximum epochs  
+PATIENCE = 200         # Early stopping patience
 ```
 
-## 🎯 Typical Workflow
+## 🎯 Research Workflow
 
-1. **Train the model**: Run `train_vae.py` to get a timestamped results folder
-2. **Basic evaluation**: Run `evaluate_vae.py` to check training quality and orthogonality
-3. **Geometric analysis**: Run `analyze_latent_geometry.py` for deep manifold analysis
-4. **Regime modeling**: Run `regime_modeling.py` to map clusters to financial regimes
-5. **Explore results**: Open the interactive HTML files to explore the 3D latent space and review the `REGIME_ANALYSIS_SUMMARY.md` for financial insights.
+1. **Train β-VAE**: `train_vae.py` - Learn stable latent manifold representation
+2. **Validate Latents**: `evaluate_vae.py` - Ensure orthogonality and normality  
+3. **Geometric Analysis**: `analyze_latent_geometry.py` - Compute manifold metrics and validate clustering
+4. **Explore Results**: Open interactive HTML files and review clustering comparisons
 
-## 📊 Key Insights You'll Get
+## 📊 Key Research Findings
 
-### From Evaluation:
-- **Orthogonality**: How well-separated your latent dimensions are
-- **Training Quality**: Loss curves and convergence analysis
-- **Distribution Match**: How close latent variables are to N(0,1)
+### Manifold Geometry Discovery:
+- **Curvature Evidence**: Non-linear relationship between geodesic and Euclidean distances
+- **Metric Tensor Computation**: Local geometry captured via decoder Jacobians  
+- **Riemannian Structure**: Meaningful geometric structure in learned latent space
 
-### From Geometric Analysis:
-- **Manifold Curvature**: Where the latent space is curved vs flat
-- **Geodesic Structure**: How geometric distances differ from Euclidean
-- **Temporal Flow**: How market states move through the latent space
-- **Clustering Comparison**: Statistical test showing whether Euclidean or geodesic clustering is better
-- **Clustering Quality**: Silhouette scores, Calinski-Harabasz index, and Davies-Bouldin index for both approaches
+### Clustering Performance Validation:
+- **Geodesic Advantage**: Improved Silhouette scores (0.07 → 0.48)
+- **Calinski-Harabasz**: Better cluster separation (64 → 1,817)  
+- **Davies-Bouldin**: Reduced cluster overlap (2.57 → 0.60)
+- **Temporal Coherence**: Geodesic clusters show better chronological ordering
 
-### From Regime Modeling:
-- **Financial Regime Structure**: Risk-return profiles and characteristics of each market regime
-- **Sector Dynamics**: How different sectors behave within each regime
-- **Regime Transitions**: Probability matrices and persistence patterns of regime changes
-- **Clustering Validation**: Financial coherence comparison between Euclidean and geodesic approaches
-- **Investment Insights**: Actionable regime-based analysis for portfolio management and risk assessment
+### Technical Contributions:
+- **Stable Training**: Overcomes posterior collapse in financial VAEs
+- **Orthogonal Latents**: Decorrelated factors via specialized loss design
+- **Geometric Pipeline**: End-to-end framework for manifold learning on time series
 
 ## 🛠️ Dependencies
 
 **Core Requirements**:
-- `torch` - PyTorch for deep learning
-- `numpy`, `pandas` - Data manipulation
-- `matplotlib`, `seaborn` - Basic plotting
-- `scikit-learn` - Clustering and manifold learning
-- `scipy` - Statistical functions
+- `torch` - PyTorch for β-VAE implementation
+- `numpy`, `pandas` - Data manipulation and linear algebra
+- `matplotlib`, `seaborn` - Statistical plotting and analysis
+- `scikit-learn` - Clustering algorithms and manifold learning
+- `scipy` - Riemannian geometry computations
 
-**Optional (for 3D interactive plots)**:
-- `plotly` - Interactive 3D visualizations
+**Optional (for interactive 3D visualizations)**:
+- `plotly` - Interactive manifold exploration
 
-Install plotly for best experience:
 ```bash
-pip install plotly
+pip install plotly  # Recommended for full experience
 ```
 
-## 💡 Tips
+## 💡 Usage Tips
 
-- **First run**: Start with default parameters to get familiar with outputs
-- **Large datasets**: Use `--n_samples 500` for faster geometric analysis
-- **Custom analysis**: Adjust `--n_clusters` based on your data structure
-- **Interactive exploration**: Install plotly and open HTML files in browser for 3D interaction
-- **Results comparison**: Each training run gets a unique timestamp for easy comparison
-- **Regime analysis**: The script automatically detects the latest VAE results, but you can specify paths manually for specific experiments
-- **Financial validation**: Pay attention to the clustering comparison results to understand which approach provides better financial interpretability
-- **Sector insights**: Use the sector distribution analysis to understand how market regimes relate to sector rotation patterns
+- **First Run**: Use default parameters to familiarize with geometric outputs
+- **Performance**: Use `--n_samples 500` for faster analysis on large datasets  
+- **Clustering**: Adjust `--n_clusters` based on desired granularity
+- **Visualization**: Install plotly for interactive 3D manifold exploration
+- **Reproducibility**: Each run gets timestamped results for comparison
+
+## 📖 Paper Reference
+
+This implementation supports the research described in:
+
+**"Market Manifolds: β-VAE Learning and Geometry on Time Series"**
+
+*Abstract*: Financial markets exhibit complex, non-linear dynamics that traditional Euclidean models often fail to capture. This paper introduces a novel framework for learning and analyzing the underlying geometry of financial market states using β-VAEs with Riemannian metric computation.
+
+## 🔬 Future Research Directions
+
+- **Generative Modeling**: Sample realistic market scenarios along geodesic paths
+- **Reinforcement Learning**: Train agents directly on the learned manifold  
+- **Risk Management**: Use curvature as an early warning signal for instability
+- **Multi-Asset**: Extend framework to FX, commodities, and crypto markets
 
 ---
 
-*This pipeline provides a complete framework for understanding the geometric structure of financial market data through learned latent representations.*
+*This framework establishes a new foundation for geometry-aware quantitative finance through learned manifold representations.*
