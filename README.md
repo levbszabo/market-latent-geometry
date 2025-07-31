@@ -3,7 +3,7 @@
 **Learning and analyzing the geometric structure of financial market manifolds using β-VAE and Riemannian geometry.**
 
 <p align="center">
-  <img src="figures/manifold-1.jpg" alt="Market Manifold" width="400"/>
+  <img src="figures/manifold-1.jpg" alt="Market Manifold" width="600"/>
 </p>
 
 This repository implements a framework for discovering the intrinsic geometry of financial time series through variational autoencoders. By treating the VAE decoder as a parameterization of an embedded manifold, we compute Riemannian metric tensors and geodesic distances that respect the learned curvature of market states.

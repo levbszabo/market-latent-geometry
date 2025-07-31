@@ -382,9 +382,27 @@ class LatentGeometryAnalyzer:
         euclidean_metrics = safe_calculate_metrics(
             self.z, self.labels_euclidean, "Euclidean"
         )
-        geodesic_metrics = safe_calculate_metrics(
-            self.z_geodesic, self.labels_geodesic, "Geodesic"
-        )
+        # For geodesic clustering, use precomputed geodesic distances for silhouette score
+        # but MDS embedding for other metrics (which require coordinate vectors)
+        try:
+            geodesic_metrics = {
+                "silhouette": silhouette_score(
+                    self.geodesic_distances, self.labels_geodesic, metric="precomputed"
+                ),
+                "calinski_harabasz": calinski_harabasz_score(
+                    self.z_geodesic, self.labels_geodesic
+                ),
+                "davies_bouldin": davies_bouldin_score(
+                    self.z_geodesic, self.labels_geodesic
+                ),
+            }
+        except Exception as e:
+            print(f"   ⚠️  Warning: Error calculating Geodesic metrics: {e}")
+            geodesic_metrics = {
+                "silhouette": 0.0,
+                "calinski_harabasz": 0.0,
+                "davies_bouldin": 1.0,
+            }
         pca_metrics = safe_calculate_metrics(self.z_pca, self.labels_pca, "PCA")
 
         # Calculate pairwise cluster agreements
@@ -394,63 +412,103 @@ class LatentGeometryAnalyzer:
         agreement_euc_pca = adjusted_rand_score(self.labels_euclidean, self.labels_pca)
         agreement_geo_pca = adjusted_rand_score(self.labels_geodesic, self.labels_pca)
 
-        # Perform bootstrap test for silhouette score differences
-        def bootstrap_silhouette_test(z1, labels1, z2, labels2, n_bootstrap=500):
-            """Bootstrap test for silhouette score difference."""
-            bootstrap_diffs = []
+        # Perform permutation test for silhouette score differences
+        def permutation_test_clustering(n_permutations=1000):
+            """
+            Permutation test using all data points.
+            Tests null hypothesis: clustering method has no effect on clustering quality.
 
-            for _ in range(n_bootstrap):
-                # Resample indices
-                indices = np.random.choice(len(z1), len(z1), replace=True)
+            H0: Silhouette scores from different methods are from same distribution
+            H1: At least one method produces significantly different clustering quality
+            """
+            print(
+                f"   🔬 Performing permutation tests with all data ({n_permutations} permutations)..."
+            )
+
+            # Get baseline silhouette scores (observed test statistics)
+            sil_euclidean = euclidean_metrics["silhouette"]
+            sil_geodesic = geodesic_metrics["silhouette"]
+            sil_pca = pca_metrics["silhouette"]
+
+            # Observed differences (our test statistics)
+            obs_diff_euc_geo = sil_geodesic - sil_euclidean
+            obs_diff_euc_pca = sil_pca - sil_euclidean
+            obs_diff_geo_pca = sil_pca - sil_geodesic
+
+            print(f"      Observed differences:")
+            print(f"        Geodesic - Euclidean: {obs_diff_euc_geo:.4f}")
+            print(f"        PCA - Euclidean: {obs_diff_euc_pca:.4f}")
+            print(f"        PCA - Geodesic: {obs_diff_geo_pca:.4f}")
+
+            # Permutation test: randomly assign labels and recompute
+            perm_diffs_euc_geo = []
+            perm_diffs_euc_pca = []
+            perm_diffs_geo_pca = []
+
+            for i in range(n_permutations):
+                if (i + 1) % 200 == 0:
+                    print(f"        Permutation {i+1}/{n_permutations}")
+
+                # Randomly permute cluster labels (this breaks the clustering-performance link)
+                perm_labels_euc = np.random.permutation(self.labels_euclidean)
+                perm_labels_geo = np.random.permutation(self.labels_geodesic)
+                perm_labels_pca = np.random.permutation(self.labels_pca)
 
                 try:
-                    z1_boot = z1[indices]
-                    z2_boot = z2[indices]
-                    labels1_boot = labels1[indices]
-                    labels2_boot = labels2[indices]
+                    # Compute silhouette scores with permuted labels
+                    # If H0 is true, these should be similar to original scores
+                    perm_sil_euc = silhouette_score(self.z, perm_labels_euc)
+                    perm_sil_geo = silhouette_score(
+                        self.geodesic_distances, perm_labels_geo, metric="precomputed"
+                    )
+                    perm_sil_pca = silhouette_score(self.z_pca, perm_labels_pca)
 
-                    sil1 = silhouette_score(z1_boot, labels1_boot)
-                    sil2 = silhouette_score(z2_boot, labels2_boot)
-                    bootstrap_diffs.append(sil2 - sil1)
-                except:
+                    # Store differences under null hypothesis
+                    perm_diffs_euc_geo.append(perm_sil_geo - perm_sil_euc)
+                    perm_diffs_euc_pca.append(perm_sil_pca - perm_sil_euc)
+                    perm_diffs_geo_pca.append(perm_sil_pca - perm_sil_geo)
+
+                except Exception as e:
+                    # Skip permutations that fail (e.g., all points in one cluster)
                     continue
 
-            return np.array(bootstrap_diffs)
+            # Calculate p-values: fraction of permuted differences >= observed
+            # Two-tailed test: |permuted| >= |observed|
+            p_euc_geo = np.mean(np.abs(perm_diffs_euc_geo) >= np.abs(obs_diff_euc_geo))
+            p_euc_pca = np.mean(np.abs(perm_diffs_euc_pca) >= np.abs(obs_diff_euc_pca))
+            p_geo_pca = np.mean(np.abs(perm_diffs_geo_pca) >= np.abs(obs_diff_geo_pca))
 
-        # Bootstrap tests between all pairs
-        print("   🔬 Performing bootstrap statistical tests...")
-        bootstrap_euc_geo = bootstrap_silhouette_test(
-            self.z, self.labels_euclidean, self.z_geodesic, self.labels_geodesic
-        )
-        bootstrap_euc_pca = bootstrap_silhouette_test(
-            self.z, self.labels_euclidean, self.z_pca, self.labels_pca
-        )
-        bootstrap_geo_pca = bootstrap_silhouette_test(
-            self.z_geodesic, self.labels_geodesic, self.z_pca, self.labels_pca
-        )
+            print(
+                f"      Valid permutations: {len(perm_diffs_euc_geo)}/{n_permutations}"
+            )
 
-        # Calculate p-values
-        obs_diff_euc_geo = (
-            geodesic_metrics["silhouette"] - euclidean_metrics["silhouette"]
-        )
-        obs_diff_euc_pca = pca_metrics["silhouette"] - euclidean_metrics["silhouette"]
-        obs_diff_geo_pca = pca_metrics["silhouette"] - geodesic_metrics["silhouette"]
+            return {
+                "p_euclidean_vs_geodesic": p_euc_geo,
+                "p_euclidean_vs_pca": p_euc_pca,
+                "p_geodesic_vs_pca": p_geo_pca,
+                "observed_differences": {
+                    "euclidean_vs_geodesic": obs_diff_euc_geo,
+                    "euclidean_vs_pca": obs_diff_euc_pca,
+                    "geodesic_vs_pca": obs_diff_geo_pca,
+                },
+                "permutation_distributions": {
+                    "euclidean_vs_geodesic": perm_diffs_euc_geo,
+                    "euclidean_vs_pca": perm_diffs_euc_pca,
+                    "geodesic_vs_pca": perm_diffs_geo_pca,
+                },
+            }
 
-        p_value_euc_geo = (
-            np.mean(np.abs(bootstrap_euc_geo) >= np.abs(obs_diff_euc_geo))
-            if len(bootstrap_euc_geo) > 0
-            else 1.0
-        )
-        p_value_euc_pca = (
-            np.mean(np.abs(bootstrap_euc_pca) >= np.abs(obs_diff_euc_pca))
-            if len(bootstrap_euc_pca) > 0
-            else 1.0
-        )
-        p_value_geo_pca = (
-            np.mean(np.abs(bootstrap_geo_pca) >= np.abs(obs_diff_geo_pca))
-            if len(bootstrap_geo_pca) > 0
-            else 1.0
-        )
+        # Run permutation test
+        perm_results = permutation_test_clustering(n_permutations=1000)
+
+        # Extract results for compatibility with existing code
+        obs_diff_euc_geo = perm_results["observed_differences"]["euclidean_vs_geodesic"]
+        obs_diff_euc_pca = perm_results["observed_differences"]["euclidean_vs_pca"]
+        obs_diff_geo_pca = perm_results["observed_differences"]["geodesic_vs_pca"]
+
+        p_value_euc_geo = perm_results["p_euclidean_vs_geodesic"]
+        p_value_euc_pca = perm_results["p_euclidean_vs_pca"]
+        p_value_geo_pca = perm_results["p_geodesic_vs_pca"]
 
         # Determine ranking based on multiple metrics
         def rank_approaches():
@@ -503,21 +561,47 @@ class LatentGeometryAnalyzer:
                 "geodesic_vs_pca": float(agreement_geo_pca),
             },
             "statistical_tests": {
+                "test_method": "permutation_test",
+                "null_hypothesis": "Clustering method has no effect on clustering quality",
+                "alternative_hypothesis": "At least one method produces significantly different clustering quality",
+                "n_permutations": 1000,
+                "test_statistic": "silhouette_score_difference",
                 "euclidean_vs_geodesic": {
                     "observed_silhouette_difference": float(obs_diff_euc_geo),
                     "p_value": float(p_value_euc_geo),
-                    "significant": bool(p_value_euc_geo < 0.05),
+                    "significant_at_0.05": bool(p_value_euc_geo < 0.05),
+                    "significant_at_0.01": bool(p_value_euc_geo < 0.01),
+                    "significant_bonferroni": bool(
+                        p_value_euc_geo < 0.05 / 3
+                    ),  # Multiple comparison correction
+                    "interpretation": (
+                        "Geodesic superior"
+                        if obs_diff_euc_geo > 0
+                        else "Euclidean superior"
+                    ),
                 },
                 "euclidean_vs_pca": {
                     "observed_silhouette_difference": float(obs_diff_euc_pca),
                     "p_value": float(p_value_euc_pca),
-                    "significant": bool(p_value_euc_pca < 0.05),
+                    "significant_at_0.05": bool(p_value_euc_pca < 0.05),
+                    "significant_at_0.01": bool(p_value_euc_pca < 0.01),
+                    "significant_bonferroni": bool(p_value_euc_pca < 0.05 / 3),
+                    "interpretation": (
+                        "PCA superior" if obs_diff_euc_pca > 0 else "Euclidean superior"
+                    ),
                 },
                 "geodesic_vs_pca": {
                     "observed_silhouette_difference": float(obs_diff_geo_pca),
                     "p_value": float(p_value_geo_pca),
-                    "significant": bool(p_value_geo_pca < 0.05),
+                    "significant_at_0.05": bool(p_value_geo_pca < 0.05),
+                    "significant_at_0.01": bool(p_value_geo_pca < 0.01),
+                    "significant_bonferroni": bool(p_value_geo_pca < 0.05 / 3),
+                    "interpretation": (
+                        "PCA superior" if obs_diff_geo_pca > 0 else "Geodesic superior"
+                    ),
                 },
+                "bonferroni_alpha": 0.05 / 3,
+                "permutation_results": perm_results,  # Store full permutation results
             },
             "ranking": {
                 "first": ranking[0][0],
@@ -552,6 +636,29 @@ class LatentGeometryAnalyzer:
         print(f"       Euclidean vs Geodesic: {agreement_euc_geo:.4f}")
         print(f"       Euclidean vs PCA: {agreement_euc_pca:.4f}")
         print(f"       Geodesic vs PCA: {agreement_geo_pca:.4f}")
+        print(f"   🧪 Permutation Test Results (n=1000):")
+        print(f"       Null Hypothesis: Clustering method has no effect on quality")
+        print(
+            f"       Euclidean vs Geodesic: p={p_value_euc_geo:.4f} {'***' if p_value_euc_geo < 0.001 else '**' if p_value_euc_geo < 0.01 else '*' if p_value_euc_geo < 0.05 else 'ns'}"
+        )
+        print(
+            f"       Euclidean vs PCA: p={p_value_euc_pca:.4f} {'***' if p_value_euc_pca < 0.001 else '**' if p_value_euc_pca < 0.01 else '*' if p_value_euc_pca < 0.05 else 'ns'}"
+        )
+        print(
+            f"       Geodesic vs PCA: p={p_value_geo_pca:.4f} {'***' if p_value_geo_pca < 0.001 else '**' if p_value_geo_pca < 0.01 else '*' if p_value_geo_pca < 0.05 else 'ns'}"
+        )
+        bonferroni_alpha = 0.05 / 3
+        print(f"       Bonferroni-corrected α = {bonferroni_alpha:.4f}")
+        any_significant = any(
+            [
+                p_value_euc_geo < bonferroni_alpha,
+                p_value_euc_pca < bonferroni_alpha,
+                p_value_geo_pca < bonferroni_alpha,
+            ]
+        )
+        print(
+            f"       After multiple comparison correction: {'Significant differences detected' if any_significant else 'No significant differences'}"
+        )
         print(
             f"   🏆 Ranking: 1st={ranking[0][0]}, 2nd={ranking[1][0]}, 3rd={ranking[2][0]}"
         )
@@ -722,10 +829,17 @@ Detailed Scores:
 {ranking['second']}: {ranking['scores'][ranking['second']]:.3f}
 {ranking['third']}: {ranking['scores'][ranking['third']]:.3f}
 
-Statistical Significance (p < 0.05):
-Euc vs Geo: {'✓' if self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['significant'] else '✗'}
-Euc vs PCA: {'✓' if self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['significant'] else '✗'}
-Geo vs PCA: {'✓' if self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['significant'] else '✗'}
+Permutation Test Results (n=1000):
+Null: Method has no effect on quality
+
+P-values (α=0.05):
+Euc vs Geo: {self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['p_value']:.4f} {'***' if self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['p_value'] < 0.001 else '**' if self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['p_value'] < 0.01 else '*' if self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['significant_at_0.05'] else 'ns'}
+Euc vs PCA: {self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['p_value']:.4f} {'***' if self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['p_value'] < 0.001 else '**' if self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['p_value'] < 0.01 else '*' if self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['significant_at_0.05'] else 'ns'}
+Geo vs PCA: {self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['p_value']:.4f} {'***' if self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['p_value'] < 0.001 else '**' if self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['p_value'] < 0.01 else '*' if self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['significant_at_0.05'] else 'ns'}
+
+Bonferroni-corrected:
+α = {self.clustering_comparison['statistical_tests']['bonferroni_alpha']:.4f}
+Significant: {'Yes' if any([self.clustering_comparison['statistical_tests']['euclidean_vs_geodesic']['significant_bonferroni'], self.clustering_comparison['statistical_tests']['euclidean_vs_pca']['significant_bonferroni'], self.clustering_comparison['statistical_tests']['geodesic_vs_pca']['significant_bonferroni']]) else 'No'}
 
 PCA Info:
 Dims: {self.clustering_comparison['pca_info']['n_components']}
@@ -750,6 +864,143 @@ Variance: {self.clustering_comparison['pca_info']['total_variance_explained']:.3
         plt.close()
 
         print("   ✅ Saved comprehensive clustering_comparison.png")
+
+        # Create permutation test visualization
+        self._create_permutation_test_plot()
+
+    def _create_permutation_test_plot(self):
+        """Create visualization of permutation test results showing null distributions."""
+        print("   📊 Creating permutation test visualization...")
+
+        if (
+            not hasattr(self, "clustering_comparison")
+            or "statistical_tests" not in self.clustering_comparison
+        ):
+            print("   ⚠️  No permutation test results to visualize")
+            return
+
+        perm_results = self.clustering_comparison["statistical_tests"][
+            "permutation_results"
+        ]
+
+        # Create figure with histograms of permutation distributions
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+        comparisons = [
+            ("euclidean_vs_geodesic", "Euclidean vs Geodesic", axes[0]),
+            ("euclidean_vs_pca", "Euclidean vs PCA", axes[1]),
+            ("geodesic_vs_pca", "Geodesic vs PCA", axes[2]),
+        ]
+
+        for comp_key, title, ax in comparisons:
+            # Get permutation distribution and observed value
+            perm_diffs = perm_results["permutation_distributions"][comp_key]
+            obs_diff = perm_results["observed_differences"][comp_key]
+            p_value = self.clustering_comparison["statistical_tests"][comp_key][
+                "p_value"
+            ]
+
+            if len(perm_diffs) == 0:
+                ax.text(
+                    0.5,
+                    0.5,
+                    "No valid\npermutations",
+                    ha="center",
+                    va="center",
+                    transform=ax.transAxes,
+                    fontsize=14,
+                )
+                ax.set_title(f"{title}\nNo data")
+                continue
+
+            # Create histogram of null distribution
+            ax.hist(
+                perm_diffs,
+                bins=50,
+                alpha=0.7,
+                color="lightblue",
+                density=True,
+                edgecolor="black",
+                linewidth=0.5,
+            )
+
+            # Add observed value as vertical line
+            ax.axvline(
+                obs_diff,
+                color="red",
+                linewidth=3,
+                alpha=0.8,
+                label=f"Observed: {obs_diff:.4f}",
+            )
+
+            # Add critical values (5% most extreme)
+            perm_abs = np.abs(perm_diffs)
+            critical_value = np.percentile(perm_abs, 95)
+            ax.axvline(
+                critical_value,
+                color="orange",
+                linewidth=2,
+                linestyle="--",
+                alpha=0.7,
+                label=f"95th %ile: ±{critical_value:.4f}",
+            )
+            ax.axvline(
+                -critical_value, color="orange", linewidth=2, linestyle="--", alpha=0.7
+            )
+
+            # Shade extreme regions
+            extreme_pos = np.array(perm_diffs)[np.array(perm_diffs) >= critical_value]
+            extreme_neg = np.array(perm_diffs)[np.array(perm_diffs) <= -critical_value]
+
+            if len(extreme_pos) > 0:
+                ax.hist(extreme_pos, bins=20, alpha=0.3, color="red", density=True)
+            if len(extreme_neg) > 0:
+                ax.hist(extreme_neg, bins=20, alpha=0.3, color="red", density=True)
+
+            # Labels and title
+            ax.set_xlabel("Silhouette Score Difference")
+            ax.set_ylabel("Density")
+            ax.set_title(
+                f"{title}\np = {p_value:.4f} "
+                + (
+                    "***"
+                    if p_value < 0.001
+                    else "**" if p_value < 0.01 else "*" if p_value < 0.05 else "(ns)"
+                )
+            )
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+
+            # Add interpretation text
+            interpretation = self.clustering_comparison["statistical_tests"][comp_key][
+                "interpretation"
+            ]
+            significance = "Significant" if p_value < 0.05 else "Not significant"
+            ax.text(
+                0.02,
+                0.98,
+                f"{interpretation}\n({significance})",
+                transform=ax.transAxes,
+                va="top",
+                ha="left",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8),
+                fontsize=10,
+            )
+
+        plt.suptitle(
+            "Permutation Test Results: Null Distributions vs Observed Differences",
+            fontsize=16,
+            fontweight="bold",
+        )
+        plt.tight_layout()
+        plt.savefig(
+            self.output_dir / "permutation_test_results.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+        print("   ✅ Saved permutation_test_results.png")
 
     def create_2d_cluster_maps(self):
         """Create comprehensive 2D cluster maps for all three clustering approaches."""
@@ -1249,6 +1500,7 @@ Variance: {self.clustering_comparison['pca_info']['total_variance_explained']:.3
         print(f"📊 Clustering analyses:")
         print(f"   - {self.output_dir}/clustering_comparison.png")
         print(f"   - {self.output_dir}/clustering_comparison.json")
+        print(f"   - {self.output_dir}/permutation_test_results.png")
         print(
             f"📈 Three clustering approaches compared: Euclidean, Geodesic (MDS), PCA"
         )
