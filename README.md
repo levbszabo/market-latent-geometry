@@ -1,12 +1,12 @@
-# Market Latent Geometry
+# Market Manifolds: Geometry-Aware Latent Representations via β-VAE
 
-**Learning and analyzing the geometric structure of financial market manifolds using β-VAE and Riemannian geometry.**
+**Learning and analyzing the intrinsic geometry of financial market manifolds using β-VAE with Riemannian metric computation and geodesic-aware clustering.**
 
 <p align="center">
   <img src="figures/manifold-1.jpg" alt="Market Manifold" width="600"/>
 </p>
 
-This repository implements a framework for discovering the intrinsic geometry of financial time series through variational autoencoders. By treating the VAE decoder as a parameterization of an embedded manifold, we compute Riemannian metric tensors and geodesic distances that respect the learned curvature of market states.
+This repository implements a framework for discovering the intrinsic geometry of financial time series through β-variational autoencoders. By treating the VAE decoder as a parameterization of an embedded manifold, we compute Riemannian metric tensors and geodesic distances that respect the learned curvature of market states, enabling geometry-aware analysis and clustering.
 
 ## Quick Start
 
@@ -53,8 +53,9 @@ Validate latent space quality and training convergence:
 ### 3. Analyze Geometry (`analyze_latent_geometry.py`)
 Compute manifold geometry and perform curvature-aware clustering:
 - Riemannian metric tensor computation via decoder Jacobians
-- Geodesic distance calculation
-- Clustering comparison (Euclidean vs Geodesic vs PCA)
+- Geodesic distance calculation with proper precomputed distance matrices
+- Clustering comparison (Euclidean vs Geodesic vs PCA) using methodologically correct metrics
+- Statistical validation via permutation tests
 - 3D visualizations of learned manifold structure
 
 ## Directory Structure
@@ -113,14 +114,16 @@ PATIENCE = 200         # Early stopping patience
 - **Riemannian Structure**: Meaningful geometric structure in learned latent space
 
 ### Clustering Performance
-- **Geodesic Advantage**: Improved Silhouette scores (0.07 → 0.48)
+- **Geodesic Advantage**: Improved Silhouette scores (0.07 → 0.50) using proper geodesic distance metrics
 - **Calinski-Harabasz**: Better cluster separation (64 → 1,817)  
 - **Davies-Bouldin**: Reduced cluster overlap (2.57 → 0.60)
+- **Statistical Validation**: Permutation tests confirm significant differences (p < 0.001)
 - **Temporal Coherence**: Geodesic clusters show better chronological ordering
 
 ### Technical Contributions
 - **Stable Training**: Overcomes posterior collapse in financial VAEs
 - **Orthogonal Latents**: Decorrelated factors via specialized loss design
+- **Methodologically Sound Evaluation**: Geodesic clustering evaluated using proper geodesic distance metrics
 - **Geometric Pipeline**: End-to-end framework for manifold learning on time series
 
 ## Dependencies
@@ -147,9 +150,9 @@ Optional:
 
 This implementation supports the research described in:
 
-**"Market Manifolds: β-VAE Learning and Geometry on Time Series"**
+**"Market Manifolds: Geometry-Aware Latent Representations via β-VAE"**
 
-*Abstract*: Financial markets exhibit complex, non-linear dynamics that traditional Euclidean models often fail to capture. This paper introduces a novel framework for learning and analyzing the underlying geometry of financial market states using β-VAEs with Riemannian metric computation.
+*Abstract*: We introduce a geometry-aware framework for modeling financial market states using a β-Variational Autoencoder. Standard Euclidean representations often fail to capture the non-linear structure of market dynamics. By treating the decoder as a parameterization of a latent manifold, we compute local Riemannian metrics via Jacobians and use these to define geodesic distances. This reveals intrinsic curvature in the learned representation, confirmed both visually and quantitatively. Compared to Euclidean clustering, geodesic K-means improves Silhouette score from 0.07 to 0.50 and halves the Davies–Bouldin index, validating the manifold hypothesis.
 
 ## Future Research Directions
 
