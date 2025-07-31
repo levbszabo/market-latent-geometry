@@ -2,6 +2,8 @@
 
 **Learning and analyzing the intrinsic geometry of financial market manifolds using β-VAE with Riemannian metric computation and geodesic-aware clustering.**
 
+**[Read the full paper (PDF)](paper/market-manifolds.pdf)**
+
 <p align="center">
   <img src="figures/manifold-1.jpg" alt="Market Manifold" width="600"/>
 </p>
